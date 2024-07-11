@@ -1,4 +1,5 @@
 from .map import Pathfinder
+from typing import List, Union, Optional, Container
 
 class Targeting:
     @staticmethod
@@ -30,25 +31,39 @@ class Targeting:
         return max(targets, key=lambda t: t.creation_time)
     
 class Unit:
-    def __init__(self, unit_type, cost, health, range, damage):
-        self.unit_type = unit_type
-        self.cost = cost
-        self.health = health
-        self.max_health = health
-        self.range = range
-        self.damage = damage
-        self.position = None
+    """
+    Defines the base class for all units in the game.
+    """
+    def __init__(self, unit_type: str, cost: int, health: float, range: float, damage: float):
+        """
+        Initialize a new unit with the given attributes.
+        :param unit_type: The type of unit.
+        :param cost: The cost to deploy the unit.
+        :param health: The health of the unit.
+        :param range: The maximum attack range of the unit, defined in Euclidian distance.
+        :param damage: The damage dealt by the unit per tick.
+        """
+        self.unit_type: str = unit_type
+        self.cost: int = cost
+        self.health: float = health
+        self.max_health: float = health
+        self.range: float = range
+        self.damage: float = damage
+        self.position: float = None
         self.creation_time = None
         self.side = None
 
-    def distance_to(self, other_unit):
-        # Calculate Euclidean distance
+    def distance_to(self, other_unit: 'Unit') -> float:
+        """
+        Calculate Euclidean distance to another unit.
+        """
         return ((self.position[0] - other_unit.position[0])**2 + 
                 (self.position[1] - other_unit.position[1])**2)**0.5
 
-    def progress_towards_side(self, other_unit):
-        # Calculate how far the other unit is into this unit's side
-        # This will depend on which side of the arena the unit is on
+    def progress_towards_side(self, other_unit: 'Unit') -> float:
+        """
+        Calculate how far another unit is into this unit's side, depending on which side of the arena this unit is on.
+        """
         if self.side == 'bottom':
             # For bottom player, progress is measured by how far up the unit has moved
             return 27 - other_unit.position[1]
@@ -56,8 +71,10 @@ class Unit:
             # For top player, progress is measured by how far down the unit has moved
             return other_unit.position[1]
         
-    def distance_to_nearest_edge(self):
-        # Calculate distance to the nearest edge of the arena
+    def distance_to_nearest_edge(self) -> float:
+        """
+        Calculate the distance from this unit to the nearest edge of the arena.
+        """
         x, y = self.position
         distances = [
             x,  # distance to left edge
@@ -67,20 +84,27 @@ class Unit:
         ]
         return min(distances)
     
-    def set_side(self, side):
+    def set_side(self, side: str) -> None:
         if side not in ['top', 'bottom']:
             raise ValueError("Side must be 'top' or 'bottom'")
         self.side = side
 
-    def attack(self, target):
+    def attack(self, target: 'Unit') -> None:
         if target and target.health > 0:
             target.take_damage(self.damage)
 
-    def take_damage(self, damage):
+    def take_damage(self, damage: float) -> None:
         self.health = max(0, self.health - damage)
 
 class MobileUnit(Unit):
-    def __init__(self, unit_type, cost, health, range, damage, speed):
+    """
+    Defines the base class for mobile units in the game.
+    """
+    def __init__(self, unit_type: str, cost: float, health: float, range: float, damage: float, speed: int):
+        """
+        Initialization function.
+        :param speed: The speed of the unit, defined as the number of ticks it takes to move one tile.
+        """
         super().__init__(unit_type, cost, health, range, damage)
         self.speed = speed
         self.shields = 0
@@ -91,10 +115,10 @@ class MobileUnit(Unit):
         self.path = []
         self.destination = None
 
-    def add_shield(self, shield_amount):
+    def add_shield(self, shield_amount: float) -> None:
         self.shields += shield_amount
 
-    def move(self, game):
+    def move(self, game) -> None:
         self.frames_since_last_move += 1
         if self.frames_since_last_move >= self.speed:
             if not self.path:
@@ -112,7 +136,10 @@ class MobileUnit(Unit):
             else:
                 self.self_destruct(game)
     
-    def has_reached_enemy_edge(self, game):
+    def has_reached_enemy_edge(self, game: 'TerminalGame') -> bool:
+        """
+        Check if this unit has reached the enemy edge of the arena.
+        """
         return (self.side == 'bottom' and self.position[1] == 0) or (self.side == 'top' and self.position[1] == 27)
     
     def attack(self, game_state):
@@ -239,3 +266,6 @@ class Turret(Structure):
                 if isinstance(unit, MobileUnit) and unit.side != self.side 
                 and self.distance_to(unit) <= self.range 
                 and unit.health > 0]
+
+# Leave at bottom to avoid circular import
+from .game import TerminalGame

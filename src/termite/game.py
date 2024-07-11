@@ -2,6 +2,8 @@ from .map import Map, Pathfinder
 from .units import MobileUnit, Structure, Support
 from .units import Demolisher, Interceptor, Scout, Wall, Turret, Support
 from colorama import init, Fore, Back, Style
+import warnings
+
 class Player:
     def __init__(self):
         self.health = 30
