@@ -1,5 +1,4 @@
 from .map import Pathfinder
-from .game import TerminalGame
 
 class Targeting:
     @staticmethod

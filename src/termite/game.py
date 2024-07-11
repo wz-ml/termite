@@ -1,5 +1,7 @@
 from .map import Map, Pathfinder
 from .units import MobileUnit, Structure, Support
+from .units import Demolisher, Interceptor, Scout, Wall, Turret, Support
+from colorama import init, Fore, Back, Style
 class Player:
     def __init__(self):
         self.health = 30
@@ -216,3 +218,64 @@ class TerminalGame:
             structure.upgrade()
             return True
         return False
+
+    def get_unit_color(self, unit):
+        health_percentage = unit.health / unit.max_health
+        if health_percentage > 0.7:
+            return Fore.GREEN
+        elif health_percentage > 0.3:
+            return Fore.YELLOW
+        else:
+            return Fore.RED
+
+    def render(self):
+        output = []
+        
+        output.append(f"Turn: {self.current_turn}/100")
+        output.append(f"Frame: {self.frame_count}")
+        output.append("")
+
+        # Player information
+        p1_health = f"{Fore.RED}{'♥' * self.player1.health}{Style.RESET_ALL:<30}"
+        p2_health = f"{Fore.RED}{'♥' * self.player2.health}{Style.RESET_ALL:>30}"
+        output.append(f"Player 1: {p1_health}")
+        output.append(f"Player 2: {p2_health}")
+        output.append("")
+
+        # Resources
+        output.append(f"P1 Resources - Mobile: {Fore.CYAN}{self.player1.mobile_points:.1f}{Style.RESET_ALL}, Structure: {Fore.YELLOW}{self.player1.structure_points:.1f}{Style.RESET_ALL}")
+        output.append(f"P2 Resources - Mobile: {Fore.CYAN}{self.player2.mobile_points:.1f}{Style.RESET_ALL}, Structure: {Fore.YELLOW}{self.player2.structure_points:.1f}{Style.RESET_ALL}")
+        output.append("")
+
+        # Game board
+        for y in range(self.map.height):
+            row = ""
+            for x in range(self.map.width):
+                if not self.map.is_in_arena(x, y):
+                    row += "  "
+                elif self.map.grid[y][x] is None:
+                    row += f"{Fore.WHITE}· {Style.RESET_ALL}"
+                else:
+                    unit = self.map.grid[y][x]
+                    color = self.get_unit_color(unit)
+                    if isinstance(unit, Scout):
+                        row += f"{color}{'S' if unit.side == 'bottom' else 's'} {Style.RESET_ALL}"
+                    elif isinstance(unit, Demolisher):
+                        row += f"{color}{'D' if unit.side == 'bottom' else 'd'} {Style.RESET_ALL}"
+                    elif isinstance(unit, Interceptor):
+                        row += f"{color}{'I' if unit.side == 'bottom' else 'i'} {Style.RESET_ALL}"
+                    elif isinstance(unit, Wall):
+                        row += f"{color}{'W' if unit.side == 'bottom' else 'w'} {Style.RESET_ALL}"
+                    elif isinstance(unit, Support):
+                        row += f"{color}{'U' if unit.side == 'bottom' else 'u'} {Style.RESET_ALL}"
+                    elif isinstance(unit, Turret):
+                        row += f"{color}{'T' if unit.side == 'bottom' else 't'} {Style.RESET_ALL}"
+            output.append(row)
+
+        output.append("\nLegend:")
+        output.append(f"{Fore.GREEN}Green{Style.RESET_ALL}: High Health, {Fore.YELLOW}Yellow{Style.RESET_ALL}: Medium Health, {Fore.RED}Red{Style.RESET_ALL}: Low Health")
+        output.append("S/s: Scout, D/d: Demolisher, I/i: Interceptor")
+        output.append("W/w: Wall, U/u: Support, T/t: Turret")
+        output.append("Uppercase: Player 1, Lowercase: Player 2")
+
+        return "\n".join(output)

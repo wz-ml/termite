@@ -8,3 +8,4 @@ ipywidgets
 jupyter
 ipykernel
 matplotlib~=3.8.2
+colorama
