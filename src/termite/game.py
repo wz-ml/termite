@@ -254,19 +254,25 @@ class TerminalGame:
                 unit.attack(self)
 
     def remove_destroyed_units(self):
-        self.units = [u for u in self.units if u.health > 0]
+        destroyed_units = [unit for unit in self.units if unit.health <= 0]
+        for unit in destroyed_units:
+            self.remove_unit(unit)
+
+    def remove_unit(self, unit):
+        self.units.remove(unit)
+        x, y = unit.position
+        self.map.grid[y][x] = None
 
     def move_units(self):
-        for unit in self.get_all_mobile_units():
-            unit.move(self.pathfinder)
+        for unit in list(self.units):  # Create a copy of the list to avoid modification during iteration
+            if isinstance(unit, MobileUnit):
+                unit.move(self)
 
     def remove_destroyed_units(self):
         # Remove units with health <= 0
         destroyed_units = [unit for unit in self.units if unit.health <= 0]
         for unit in destroyed_units:
-            self.units.remove(unit)
-            x, y = unit.position
-            self.map.grid[y][x] = None  # Clear the unit from the map
+            self.remove_unit(unit)
 
         # Handle any additional effects of unit destruction
         for unit in destroyed_units:
@@ -280,7 +286,7 @@ class TerminalGame:
     def handle_mobile_unit_destruction(self, unit):
         # Handle any special effects when a mobile unit is destroyed
         # For example, applying area damage for self-destructing units
-        if unit.has_moved_at_least_5_spaces:  # You'll need to track this in the MobileUnit class
+        if unit.distance_moved >= 5:
             self.apply_self_destruct_damage(unit)
 
     def handle_structure_destruction(self, unit):
@@ -422,10 +428,6 @@ class MobileUnit(Unit):
                     self.reach_enemy_edge(game)
             else:
                 self.self_destruct(game)
-
-    @property
-    def has_moved_at_least_5_spaces(self):
-        return self.distance_moved >= 5
     
     def has_reached_enemy_edge(self, game):
         return (self.side == 'bottom' and self.position[1] == 0) or (self.side == 'top' and self.position[1] == 27)
@@ -458,6 +460,27 @@ class MobileUnit(Unit):
 
     def reset_attack_status(self):
         self.has_attacked_this_frame = False
+
+    def self_destruct(self, game):
+        if self.distance_moved >= 5:
+            # Apply area damage
+            for unit in game.units:
+                if unit.side != self.side and self.distance_to(unit) <= 1.5:
+                    unit.take_damage(self.max_health)
+
+        # Remove the unit from the game
+        game.remove_unit(self)
+
+    def take_damage(self, damage):
+        if self.shields > 0:
+            if damage <= self.shields:
+                self.shields -= damage
+                return
+            else:
+                damage -= self.shields
+                self.shields = 0
+        
+        self.health = max(0, self.health - damage)
 
 # Create specific unit types
 class Scout(MobileUnit):
