@@ -1,12 +1,12 @@
 # Termite
 A reinforcement-learning agent to compete in C1Games' Terminal.
 
+<img src="bug.jpg" width=400></img>
+
 Feature goals:
 - Initialized from high-level replays, optimized on self-play.
 - Lightweight and fast on CPU.
 - Competitive on the Terminal leaderboard.
-
-<img src="bug.jpg" width=300></img>
 
 ## Setup
 1. `git clone https://github.com/wz-ml/termite.git`
