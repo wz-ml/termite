@@ -29,11 +29,12 @@ pip install -e .
 ## Development
 Termite is currently under development. If you spot a bug or have an idea, please feel free to open an issue on Github.
 
-Likewise, if you'd like to contribute, please make a fork of the directory and submit a pull request.
-
 Todo:
 - [x] Port the Terminal environment from java to Python.
 - [ ] Verify that the ported Terminal matches the behavior of the real game.
     - [ ] Write test cases with Pytest.
 - [ ] Build an OpenAI Gymnasium wrapper around the environment.
 - [ ] Train a baseline model.
+
+## Contribution
+Thank you for contributing! Please make a fork of the directory and submit a pull request. Type hinting and reST docstrings are recommended.

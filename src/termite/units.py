@@ -138,11 +138,31 @@ class MobileUnit(Unit):
     
     def has_reached_enemy_edge(self, game: 'TerminalGame') -> bool:
         """
-        Check if this unit has reached the enemy edge of the arena.
+        Check if this unit has reached the enemy edge of the diamond-shaped arena.
         """
-        return (self.side == 'bottom' and self.position[1] == 0) or (self.side == 'top' and self.position[1] == 27)
+        x, y = self.position
+        if self.side == 'bottom':
+            # For units starting at the bottom, they reach the enemy edge when:
+            # x + y == 27 (top-right edge) or x - y == 0 (top-left edge)
+            return x + y == 27 or x == y
+        else:  # self.side == 'top'
+            # For units starting at the top, they reach the enemy edge when:
+            # x + y == 27 (bottom-left edge) or y - x == 0 (bottom-right edge)
+            return x + y == 27 or y == x
     
-    def attack(self, game_state):
+    def attack(self, game_state: 'TerminalGame') -> Union[float, None]:
+        """
+        Attack the closest enemy unit within range.
+
+        Targeting priority:
+        1. Mobile units over Structures
+        2. Nearest target(s)
+        3. Lowest remaining health
+        4. Furthest into/towards the attacker's side
+        5. Closest to an edge
+
+        :return: The amount of damage dealt to the target. None if no target was attacked.
+        """
         if self.has_attacked_this_frame:
             return  # Unit can only attack once per frame
 
@@ -155,23 +175,35 @@ class MobileUnit(Unit):
             return damage_dealt
         return 0
 
-    def get_potential_targets(self, game_state):
+    def get_potential_targets(self, game_state: 'TerminalGame') -> List['Unit']:
+        """
+        Returns all valid targets in range of this unit.
+        """
         return [unit for unit in game_state.units 
                 if unit.side != self.side 
                 and self.distance_to(unit) <= self.range 
                 and unit.health > 0]
 
-    def deal_damage(self, target):
+    def deal_damage(self, target: 'Unit') -> float:
+        """
+        Deal damage to a target unit.
+        """
         damage = self.damage
         if isinstance(target, Structure) and self.unit_type == "Interceptor":
             return 0  # Interceptors cannot damage structures
         target.take_damage(damage)
         return damage
 
-    def reset_attack_status(self):
+    def reset_attack_status(self) -> None:
         self.has_attacked_this_frame = False
 
-    def self_destruct(self, game):
+    def self_destruct(self, game) -> None:
+        """
+        Applies self-destruct damage to nearby enemy units and removes the unit from the game.
+
+        In Terminal, a unit will self-destruct if its path to the opposite side is blocked.
+        Self-destruct damage is only applied if the unit has moved at least 5 tiles.
+        """
         if self.distance_moved >= 5:
             # Apply area damage
             for unit in game.units:
@@ -181,7 +213,7 @@ class MobileUnit(Unit):
         # Remove the unit from the game
         game.remove_unit(self)
 
-    def take_damage(self, damage):
+    def take_damage(self, damage: float) -> None:
         if self.shields > 0:
             if damage <= self.shields:
                 self.shields -= damage
@@ -194,14 +226,29 @@ class MobileUnit(Unit):
 
 # Create specific unit types
 class Scout(MobileUnit):
+    """
+    The Scout is a fast, low-cost unit with low health and damage.
+
+    Useful for taking advantage of openings in the enemy's defense.
+    """
     def __init__(self):
         super().__init__("Scout", cost=1, health=15, range=3.5, damage=2, speed=1)
 
 class Demolisher(MobileUnit):
+    """
+    The Demolisher is a slow, high-cost unit with high health and damage.
+
+    Useful for breaking through enemy defenses and dealing heavy damage to structures.
+    """
     def __init__(self):
         super().__init__("Demolisher", cost=3, health=5, range=4.5, damage=8, speed=2)
 
 class Interceptor(MobileUnit):
+    """
+    The Interceptor is a slow, powerful, and cheap unit that demolishes enemy mobile attackers.
+
+    Cannot damage structures.
+    """
     def __init__(self):
         super().__init__("Interceptor", cost=1, health=40, range=4.5, damage=20, speed=4)
 
@@ -211,7 +258,18 @@ class Interceptor(MobileUnit):
         return super().deal_damage(target)
 
 class Structure(Unit):
-    def __init__(self, unit_type, cost, health, range, damage, upgrade_cost=None, upgrade_stats=None):
+    """
+    Base class for all structure units in the game.
+
+    Structure units are stationary units that provide support, defense, or attack capabilities.
+    """
+    def __init__(self, unit_type: str, cost: int, health: float, range: float, damage: float, 
+                 upgrade_cost=None, upgrade_stats=None):
+        """
+        Initialization function.
+        :param upgrade_cost: The cost to upgrade the unit.
+        :param upgrade_stats: The stats to upgrade the unit by.
+        """
         super().__init__(unit_type, cost, health, range, damage)
         self.upgrade_cost = upgrade_cost if upgrade_cost else cost
         self.upgrade_stats = upgrade_stats
@@ -219,6 +277,11 @@ class Structure(Unit):
         self.is_upgraded = False
 
     def upgrade(self):
+        """
+        Structures can be upgraded once to improve their stats.
+
+        Damage taken persists through upgrades.
+        """
         if not self.is_upgraded:
             self.is_upgraded = True
             if self.upgrade_stats:
@@ -229,11 +292,19 @@ class Structure(Unit):
             self.health = int(self.max_health * health_percentage)
 
 class Wall(Structure):
+    """
+    Simple defensive structure that provides a barrier against enemy units.
+    """
     def __init__(self):
         super().__init__("Wall", cost=1, health=60, range=0, damage=0, 
                          upgrade_cost=1, upgrade_stats={'health': 120})
 
 class Support(Structure):
+    """
+    Grants shielding to friendly units within range.
+
+    Think of it like a Starcraft 2 shield battery!
+    """
     def __init__(self):
         super().__init__("Support", cost=4, health=30, range=3.5, damage=0,
                          upgrade_stats={'range': 7, 'base_shielding': 4})
@@ -249,6 +320,9 @@ class Support(Structure):
             self.shielded_units.add(mobile_unit)
 
 class Turret(Structure):
+    """
+    High-health, high-damage, and high-cost defensive turret.
+    """
     def __init__(self):
         super().__init__("Turret", cost=2, health=75, range=2.5, damage=5,
                          upgrade_cost=4, upgrade_stats={'damage': 15, 'range': 3.5})
