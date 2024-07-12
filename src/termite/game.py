@@ -27,6 +27,37 @@ class Player:
         self.deployments = []
         return self.deployments
     
+    def upgrade(self, game_state: dict) -> List[Tuple[int, int]]:
+        """
+        This method should be overridden by AI or human player implementations.
+
+        Note: All upgrades are applied after all deployments.
+
+        :param game_state: A dictionary containing the current game state.
+        :return: A list of positions (x, y) where structures should be upgraded.
+
+        By default, returns an empty list.
+        """
+        self.upgrades = []
+        return self.upgrades
+
+    def process_upgrades(self, game: 'TerminalGame') -> None:
+        """
+        Process the upgrades requested by the player.
+        """
+        upgrade_positions = self.upgrade(game.get_game_state())
+        for pos in upgrade_positions:
+            x, y = pos
+            structure = game.map.grid[y][x]
+            if isinstance(structure, Structure) and structure.side == self.side:
+                if self.structure_points >= structure.upgrade_cost and not structure.is_upgraded:
+                    self.structure_points -= structure.upgrade_cost
+                    structure.upgrade()
+                else:
+                    warnings.warn(f"Cannot upgrade {structure.unit_type} at position {pos}. Insufficient points or already upgraded.")
+            else:
+                warnings.warn(f"Invalid upgrade position {pos}")
+
     def can_afford(self, unit: Union[MobileUnit, Structure]) -> bool:
         """
         Check if this player can afford to deploy a unit.
@@ -85,11 +116,11 @@ class TerminalGame:
             self.player2: Player = Player()
         self.current_turn = 0
         self.frame_count = 0
-        self.units = []
+        self.units: List[Unit] = []
 
     def play_turn(self):
         """
-        Play a single turn of the game.
+        Primary method. Play a single turn of the game.
         """
         self.restore_phase()
         self.deploy_phase()
@@ -97,14 +128,21 @@ class TerminalGame:
         self.current_turn += 1
 
     def restore_phase(self):
+        """
+        Phase 1: All players gain resources and mobile points.
+        """
         for player in (self.player1, self.player2):
             player.decay_mobile_points()
             player.add_resources(self.current_turn)
         # Add logic for resource generation from structures
-        # Note from Will: There's this line in the rulebook: Structures that generate resources will do so at this time.
+        # Note from Will: There's this line in the rulebook: 
+        # "Structures that generate resources will do so at this time.""
         # But I cannot for the life of me find which structures generate resources. Leaving this blank for now.
 
     def deploy_phase(self):
+        """
+        Phase 2: Players deploy units onto the map and upgrade structures.
+        """
         for player in (self.player1, self.player2):
             player_deployments = player.deploy(self.get_game_state())
             
@@ -118,7 +156,15 @@ class TerminalGame:
                         print(f"Player cannot afford to deploy {unit.unit_type}")
                 else:
                     print(f"Invalid deployment: {unit.unit_type} at {position}")
+        self.upgrade_phase()
     
+    def upgrade_phase(self):
+        """
+        Allow players to upgrade their structures. Happens at the end of the deploy phase.
+        """
+        for player in (self.player1, self.player2):
+            player.process_upgrades(self)
+
     def is_valid_deployment(self, player: Player, unit: Unit, position: Tuple[int, int]) -> bool:
         """
         Check if the position is in the player's half of the arena and if it's a valid position for the unit type.
@@ -148,18 +194,28 @@ class TerminalGame:
         
         return False
 
-    def place_unit(self, player, unit, position):
-        self.map.place_unit(unit, *position)
+    def place_unit(self, player: Player, unit: Unit, position: Tuple[int, int]):
+        """
+        Place a unit on the map at the specified position.
+        """
+        x, y = position        
         unit.creation_time = self.frame_count
         unit.set_side('bottom' if player == self.player1 else 'top')
         self.units.append(unit)
+        self.map.place_unit(unit, x, y)
 
     def action_phase(self):
+        """
+        Phase 3: units move and attack each other.
+        """
         while self.units_active():
             self.process_frame()
             self.frame_count += 1
 
     def process_frame(self):
+        """
+        Undergo a single frame of the action phase.
+        """
         self.apply_support_shields()
         self.move_units()
         self.reset_attack_status()
@@ -167,38 +223,45 @@ class TerminalGame:
         self.remove_destroyed_units()
 
     def apply_support_shields(self):
+        """
+        Step 1: All support units apply shields to nearby mobile units.
+        """
         for support in [u for u in self.units if isinstance(u, Support)]:
             for unit in [u for u in self.units if isinstance(u, MobileUnit)]:
                 if support.distance_to(unit) <= support.range:
-                    support.apply_shield(unit)
+                    support.apply_shield(unit) # apply_shield only applies the shield if the support has not already shielded.
 
+    def move_units(self):
+        """
+        Step 2: All mobile units move towards their target.
+        """
+        for unit in list(self.units):  # Create a copy of the list to avoid modification during iteration
+            if isinstance(unit, MobileUnit):
+                unit.move(self)
+                
     def reset_attack_status(self):
+        """
+        Step 3: Reset the attack status of all mobile units.
+        """
         for unit in self.units:
             if isinstance(unit, MobileUnit):
                 unit.reset_attack_status()
 
     def resolve_attacks(self):
+        """
+        Step 4: All mobile units attack enemy units within range.
+        """
         for unit in sorted(self.units, key=lambda u: u.creation_time):
             if isinstance(unit, MobileUnit):
                 unit.attack(self)
 
     def remove_destroyed_units(self):
-        destroyed_units = [unit for unit in self.units if unit.health <= 0]
-        for unit in destroyed_units:
-            self.remove_unit(unit)
+        """
+        Step 5: Remove units that have been destroyed.
 
-    def remove_unit(self, unit):
-        self.units.remove(unit)
-        x, y = unit.position
-        self.map.grid[y][x] = None
-
-    def move_units(self):
-        for unit in list(self.units):  # Create a copy of the list to avoid modification during iteration
-            if isinstance(unit, MobileUnit):
-                unit.move(self)
-
-    def remove_destroyed_units(self):
-        # Remove units with health <= 0
+        This may seem like a strange way to handle unit destruction, but Terminal
+        has the curious property that units can simultaneously destroy each other.
+        """
         destroyed_units = [unit for unit in self.units if unit.health <= 0]
         for unit in destroyed_units:
             self.remove_unit(unit)
@@ -212,52 +275,91 @@ class TerminalGame:
                 # Structures might have additional destruction effects
                 self.handle_structure_destruction(unit)
 
-    def handle_mobile_unit_destruction(self, unit):
-        # Handle any special effects when a mobile unit is destroyed
-        # For example, applying area damage for self-destructing units
+    def remove_unit(self, unit: Unit):
+        self.units.remove(unit)
+        x, y = unit.position
+        self.map.grid[y][x] = None
+
+    def handle_mobile_unit_destruction(self, unit: MobileUnit):
+        """
+        Handle any special effects when a mobile unit is destroyed.
+        For example, applying area damage for self-destructing units.
+        """
         if unit.distance_moved >= 5:
             self.apply_self_destruct_damage(unit)
 
-    def handle_structure_destruction(self, unit):
-        # Handle any special effects when a structure is destroyed
-        # For example, refunding some resources to the player
+    def handle_structure_destruction(self, unit: Structure):
+        """
+        Handle any special effects when a structure is destroyed.
+        For example, refunding some resources to the player.
+        """
         player = self.get_unit_owner(unit)
         refund = round(0.75 * unit.cost * (unit.health / unit.max_health), 1)
         player.structure_points += refund
 
-    def apply_self_destruct_damage(self, unit):
-        # Apply area damage when a mobile unit self-destructs
+    def apply_self_destruct_damage(self, unit: MobileUnit):
+        """
+        Apply area damage when a mobile unit self-destructs.
+        """
         for target in self.units:
             if target.unit_type != unit.unit_type and unit.distance_to(target) <= 1.5:
                 target.take_damage(unit.max_health)
 
-    def get_unit_owner(self, unit):
-        # Determine which player owns the unit
+    """
+    --------------- Helper Methods ---------------
+    """
+    def get_unit_owner(self, unit: Unit) -> Player:
+        """
+        Determine which player owns a given unit.
+        """
         return self.player1 if unit.side == 'bottom' else self.player2
 
-    def units_active(self):
-        # Check if there are any active mobile units on the map
+    def units_active(self) -> bool:
+        """
+        Check if there are any active mobile units on the map
+        """
         return any(isinstance(unit, MobileUnit) for unit in self.units)
 
-    def is_game_over(self):
+    def is_game_over(self) -> bool:
+        """
+        Check if the game is over.
+        """
         if self.player1.health <= 0 or self.player2.health <= 0:
             return True
         if self.current_turn >= 100:
             return True
         return False
 
-    def get_winner(self):
+    def get_winner(self) -> str:
+        """
+        Returns the winner of the game: either "Player 1", "Player 2", or "Draw".
+
+        The game should be over before calling this method.
+        """
+        assert self.is_game_over()
         if self.player1.health > self.player2.health:
             return "Player 1"
         elif self.player2.health > self.player1.health:
             return "Player 2"
         else:
-            # Implement computation time comparison logic
+            # TODO: Implement computation time comparison logic -> if both players kill each other simultaneously
+            # or have the same health after 100 turns, the player with the most remaining computation time wins.
             pass
+            return "Draw"
 
     def get_game_state(self) -> dict:
-        # Return a representation of the current game state
-        # This should include information that players need to make decisions
+        """
+        Return a representation of the current game state.
+        This should include all the information that players need to make decisions.
+
+        Keys:
+        - map: A 2D list representing the game map.
+        - current_turn: The current turn number.
+        - player1_health: Player 1's health.
+        - player2_health: Player 2's health.
+        - player1_resources: A dictionary of Player 1's resources. Keys: 'mobile', 'structure'.
+        - player2_resources: A dictionary of Player 2's resources. Keys: 'mobile', 'structure'.
+        """
         return {
             'map': self.map.grid,
             'current_turn': self.current_turn,
@@ -268,14 +370,22 @@ class TerminalGame:
             'units': self.units
         }
     
-    def upgrade_structure(self, player, structure):
+    def upgrade_structure(self, player: Player, structure: Structure) -> bool:
+        """
+        Request to upgrade a structure.
+
+        Returns True if the upgrade was successful, False otherwise.
+        """
         if player.structure_points >= structure.upgrade_cost and not structure.is_upgraded:
             player.structure_points -= structure.upgrade_cost
             structure.upgrade()
             return True
         return False
 
-    def get_unit_color(self, unit):
+    def get_unit_color(self, unit: Unit):
+        """
+        Helper function for rendering units with different colors based on health.
+        """
         health_percentage = unit.health / unit.max_health
         if health_percentage > 0.7:
             return Fore.GREEN
@@ -285,6 +395,10 @@ class TerminalGame:
             return Fore.RED
 
     def render(self):
+        """
+        Render the game state as a prettified string to print.
+        """
+
         output = []
         
         output.append(f"Turn: {self.current_turn}/100")

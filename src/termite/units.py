@@ -1,5 +1,5 @@
 from .map import Pathfinder
-from typing import List, Union, Optional, Container
+from typing import List, Union, Optional, Container, Tuple
 
 class Targeting:
     @staticmethod
@@ -50,8 +50,27 @@ class Unit:
         self.range: float = range
         self.damage: float = damage
         self.position: float = None
-        self.creation_time = None
+        self.creation_time: Optional[int] = None
         self.side = None
+
+    def set_side(self, side: str) -> None:
+        """
+        Set the side of the arena this unit is on. Used for pathfinding and targeting.
+        """
+        if side not in ['top', 'bottom']:
+            raise ValueError("Side must be 'top' or 'bottom'")
+        self.side = side
+
+        if self.side == 'bottom':
+            if self.position[0] <= 13:
+                self.target_edge = 'top-left'
+            else:
+                self.target_edge = 'top-right'
+        else:  # self.side == 'top'
+            if self.position[0] <= 13:
+                self.target_edge = 'bottom-left'
+            else:
+                self.target_edge = 'bottom-right'
 
     def distance_to(self, other_unit: 'Unit') -> float:
         """
@@ -83,11 +102,6 @@ class Unit:
             27 - y  # distance to bottom edge
         ]
         return min(distances)
-    
-    def set_side(self, side: str) -> None:
-        if side not in ['top', 'bottom']:
-            raise ValueError("Side must be 'top' or 'bottom'")
-        self.side = side
 
     def attack(self, target: 'Unit') -> None:
         if target and target.health > 0:
@@ -108,7 +122,7 @@ class MobileUnit(Unit):
         super().__init__(unit_type, cost, health, range, damage)
         self.speed = speed
         self.shields = 0
-        self.position = None  # To be set when deployed
+        self.position: Optional[Tuple[int, int]] = None  # To be set when deployed
         self.speed = speed
         self.frames_since_last_move = 0
         self.last_move = None
@@ -118,7 +132,7 @@ class MobileUnit(Unit):
     def add_shield(self, shield_amount: float) -> None:
         self.shields += shield_amount
 
-    def move(self, game) -> None:
+    def move(self, game: 'TerminalGame') -> None:
         self.frames_since_last_move += 1
         if self.frames_since_last_move >= self.speed:
             if not self.path:
@@ -195,6 +209,9 @@ class MobileUnit(Unit):
         return damage
 
     def reset_attack_status(self) -> None:
+        """
+        All mobile units can attack once per frame. This resets the attack status.
+        """
         self.has_attacked_this_frame = False
 
     def self_destruct(self, game) -> None:
@@ -311,7 +328,12 @@ class Support(Structure):
         self.base_shielding = 3
         self.shielded_units = set()
 
-    def apply_shield(self, mobile_unit):
+    def apply_shield(self, mobile_unit: MobileUnit):
+        """
+        Apply shield to a mobile unit if it hasn't been shielded by this support before.
+        
+        :param mobile_unit: The mobile unit to shield
+        """
         if mobile_unit not in self.shielded_units:
             shield_amount = self.base_shielding
             if self.is_upgraded:

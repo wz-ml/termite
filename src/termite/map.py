@@ -1,39 +1,82 @@
 import heapq
-
+from .units import Unit, MobileUnit, Structure
+from typing import List, Union, Optional, Tuple
 class Map:
     def __init__(self):
         self.width = 28
         self.height = 28
-        self.grid = [[None for _ in range(self.width)] for _ in range(self.height)]
+        self.grid: List = [[None for _ in range(self.width)] for _ in range(self.height)]
 
-    def is_in_arena(self, x, y):
+    def is_in_arena(self, x: int, y: int) -> bool:
+        """
+        Check if a given position is within the arena boundaries.
+        """
         return abs(x - 13.5) + abs(y - 13.5) <= 13.5
 
-    def place_unit(self, unit, x, y):
+    def place_unit(self, unit: Unit, x: int, y: int):
+        """
+        Place a unit on the map at the given position.
+        """
         assert self.is_in_arena(x, y) # Redundant check
-        self.grid[y][x] = unit
         unit.position = (x, y)
+        if isinstance(unit, MobileUnit):
+            # Mobile units can be stacked, so we'll store them in a list
+            if self.map.grid[y][x] is None or not isinstance(self.map.grid[y][x], list):
+                self.map.grid[y][x] = []
+            self.map.grid[y][x].append(unit)
+        else:
+            # Structures cannot be stacked
+            self.map.grid[y][x] = unit
 
 class Pathfinder:
-    def __init__(self, game_map):
+    """
+    Pathing class that implements the A* algorithm to find the shortest path between two points on the map.
+
+    See "Patching" section (https://terminal.c1games.com/rules#AdvancedInfo) for more information.
+    """
+    def __init__(self, game_map: Map):
         self.game_map = game_map
 
-    def find_path(self, unit, start, target_edge):
+    def find_path(self, unit: MobileUnit, start: Tuple[int, int], target_edge: str) -> Optional[List[Tuple[int, int]]]:
+        """
+        Find the shortest path for a unit to reach a target edge.
+        """
         destination = self.find_destination(start, target_edge)
         path = self.a_star(start, destination)
         return self.apply_movement_preferences(path, unit.last_move)
 
     def find_destination(self, start, target_edge):
-        # Find the deepest reachable point on the target edge
+        ""
         x, y = start
-        if target_edge == 'top':
-            return max((x, 0) for x in range(28) if self.game_map.is_in_arena(x, 0) and self.is_reachable(start, (x, 0)))
-        elif target_edge == 'bottom':
-            return max((x, 27) for x in range(28) if self.game_map.is_in_arena(x, 27) and self.is_reachable(start, (x, 27)))
-        elif target_edge == 'left':
-            return max((0, y) for y in range(28) if self.game_map.is_in_arena(0, y) and self.is_reachable(start, (0, y)))
-        elif target_edge == 'right':
-            return max((27, y) for y in range(28) if self.game_map.is_in_arena(27, y) and self.is_reachable(start, (27, y)))
+        possible_destinations = []
+
+        if target_edge == 'top-left':
+            for i in range(14):
+                if self.game_map.is_in_arena(i, i) and self.is_reachable(start, (i, i)):
+                    possible_destinations.append((i, i))
+        elif target_edge == 'top-right':
+            for i in range(14, 28):
+                if self.game_map.is_in_arena(i, 27-i) and self.is_reachable(start, (i, 27-i)):
+                    possible_destinations.append((i, 27-i))
+        elif target_edge == 'bottom-left':
+            for i in range(14):
+                if self.game_map.is_in_arena(i, 27-i) and self.is_reachable(start, (i, 27-i)):
+                    possible_destinations.append((i, 27-i))
+        elif target_edge == 'bottom-right':
+            for i in range(14, 28):
+                if self.game_map.is_in_arena(i, i) and self.is_reachable(start, (i, i)):
+                    possible_destinations.append((i, i))
+        else:
+            raise ValueError(f"Invalid target edge: {target_edge}")
+
+        if not possible_destinations:
+            return None
+
+        # Return the destination that's deepest into enemy territory
+        if target_edge.startswith('top'):
+            return min(possible_destinations, key=lambda pos: pos[1])
+        else:  # bottom edges
+            return max(possible_destinations, key=lambda pos: pos[1])
 
     def a_star(self, start, goal):
         def heuristic(a, b):
