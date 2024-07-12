@@ -33,112 +33,188 @@ class Pathfinder:
     Pathing class that implements the A* algorithm to find the shortest path between two points on the map.
 
     See "Patching" section (https://terminal.c1games.com/rules#AdvancedInfo) for more information.
+
+    A lot of code is ported from the Terminal python-algo starter kit.
     """
+class Pathfinder:
     def __init__(self, game_map: Map):
         self.game_map = game_map
+        self.HORIZONTAL = 1
+        self.VERTICAL = 2
 
-    def find_path(self, unit: MobileUnit, start: Tuple[int, int], target_edge: str) -> Optional[List[Tuple[int, int]]]:
+    def find_path(self, unit: MobileUnit, start: Tuple[int, int], target_edge: str) -> List[Tuple[int, int]]:
+        end_points = self._get_end_points(target_edge)
+        ideal_endpoint = self._idealness_search(start, end_points)
+        self._validate(ideal_endpoint, end_points)
+        return self._get_path(start, end_points)
+
+    def _get_end_points(self, target_edge: str) -> List[Tuple[int, int]]:
         """
-        Find the shortest path for a unit to reach a target edge.
+        Returns the most ideal targets to reach based on the target edge.
         """
-        destination = self.find_destination(start, target_edge)
-        path = self.a_star(start, destination)
-        return self.apply_movement_preferences(path, unit.last_move)
-
-    def find_destination(self, start, target_edge):
-        ""
-        x, y = start
-        possible_destinations = []
-
+        end_points = []
         if target_edge == 'top-left':
-            for i in range(14):
-                if self.game_map.is_in_arena(i, i) and self.is_reachable(start, (i, i)):
-                    possible_destinations.append((i, i))
+            end_points = [(x, x) for x in range(14) if self.game_map.is_in_arena(x, x)]
         elif target_edge == 'top-right':
-            for i in range(14, 28):
-                if self.game_map.is_in_arena(i, 27-i) and self.is_reachable(start, (i, 27-i)):
-                    possible_destinations.append((i, 27-i))
+            end_points = [(x, 27-x) for x in range(14, 28) if self.game_map.is_in_arena(x, 27-x)]
         elif target_edge == 'bottom-left':
-            for i in range(14):
-                if self.game_map.is_in_arena(i, 27-i) and self.is_reachable(start, (i, 27-i)):
-                    possible_destinations.append((i, 27-i))
+            end_points = [(x, 27-x) for x in range(14) if self.game_map.is_in_arena(x, 27-x)]
         elif target_edge == 'bottom-right':
-            for i in range(14, 28):
-                if self.game_map.is_in_arena(i, i) and self.is_reachable(start, (i, i)):
-                    possible_destinations.append((i, i))
+            end_points = [(x, x) for x in range(14, 28) if self.game_map.is_in_arena(x, x)]
+        return end_points
+
+    def _idealness_search(self, start: Tuple[int, int], end_points: List[Tuple[int, int]]) -> Tuple[int, int]:
+        """
+        Implements a BFS to find the most ideal reachable point.
+
+        :param start: The starting point of the search.
+        :param end_points: The target points to reach.
+        :return: The most ideal point to reach.
+        """
+        queue = [start]
+        visited = set([start])
+        best_idealness = self._get_idealness(start, end_points)
+        most_ideal = start
+
+        while queue:
+            current = queue.pop(0)
+            for neighbor in self._get_neighbors(current):
+                if neighbor not in visited and self.game_map.is_in_arena(*neighbor) and not self._is_blocked(neighbor):
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+                    current_idealness = self._get_idealness(neighbor, end_points)
+                    if current_idealness > best_idealness:
+                        best_idealness = current_idealness
+                        most_ideal = neighbor
+
+        return most_ideal
+
+    def _get_neighbors(self, location: Tuple[int, int]) -> List[Tuple[int, int]]:
+        """
+        Get the neighbors of a given location.
+        """
+        x, y = location
+        return [(x, y + 1), (x, y - 1), (x + 1, y), (x - 1, y)]
+
+    def _get_idealness(self, location: Tuple[int, int], end_points: List[Tuple[int, int]]) -> int:
+        """
+        Calculates the idealness of a location based on its distance from the target edge 
+        and how deep it's in the enemy territory.
+        """
+        if location in end_points:
+            return float('inf')
+        
+        direction = self._get_direction_from_endpoints(end_points)
+        x, y = location
+        idealness = 0
+        
+        if direction[1] == 1:
+            idealness += 28 * y
         else:
-            raise ValueError(f"Invalid target edge: {target_edge}")
+            idealness += 28 * (27 - y)
+        
+        if direction[0] == 1:
+            idealness += x
+        else:
+            idealness += (27 - x)
+        
+        return idealness
 
-        if not possible_destinations:
-            return None
+    def _get_direction_from_endpoints(self, end_points: List[Tuple[int, int]]) -> Tuple[int, int]:
+        """
+        Get the direction of the target edge based on the end points.
 
-        # Return the destination that's deepest into enemy territory
-        if target_edge.startswith('top'):
-            return min(possible_destinations, key=lambda pos: pos[1])
-        else:  # bottom edges
-            return max(possible_destinations, key=lambda pos: pos[1])
+        param end_points: A set of endpoints on the target edge of the map.
+        :return: A direction [x,y] representing the edge. For example, [1,1] for the top right and [-1, 1] for the top left
+        """
+        point = end_points[0]
+        x, y = point
+        direction = [1, 1]
+        if x < 14:
+            direction[0] = -1
+        if y < 14:
+            direction[1] = -1
+        return tuple(direction)
 
-    def a_star(self, start, goal):
-        def heuristic(a, b):
-            return abs(a[0] - b[0]) + abs(a[1] - b[1])  # Manhattan distance
+    def _validate(self, ideal_tile: Tuple[int, int], end_points: List[Tuple[int, int]]):
+        """
+        Scan with BFS from the ideal point to calculate pathlengths from all reachable points.
+        """
+        queue = [ideal_tile] if ideal_tile not in end_points else end_points
+        visited = set(queue)
+        pathlengths = {pos: 0 for pos in queue}
 
-        open_set = []
-        heapq.heappush(open_set, (0, start))
-        came_from = {}
-        g_score = {start: 0}
-        f_score = {start: heuristic(start, goal)}
+        while queue:
+            current = queue.pop(0)
+            for neighbor in self._get_neighbors(current):
+                if neighbor not in visited and self.game_map.is_in_arena(*neighbor) and not self._is_blocked(neighbor):
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+                    pathlengths[neighbor] = pathlengths[current] + 1
 
-        while open_set:
-            current = heapq.heappop(open_set)[1]
+        self.pathlengths = pathlengths
 
-            if current == goal:
-                path = []
-                while current in came_from:
-                    path.append(current)
-                    current = came_from[current]
-                path.append(start)
-                return path[::-1]
+    def _get_path(self, start: Tuple[int, int], end_points: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        """
+        Once all nodes are validated, and a target is found, the unit can path to its target.
 
-            for neighbor in self.get_neighbors(current):
-                tentative_g_score = g_score[current] + 1
+        Don't call this function directly, unless it's necessary for your decision-making.
+        Use choose_next_move instead.
+        """
+        path = [start]
+        current = start
+        move_direction = 0
 
-                if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
-                    came_from[neighbor] = current
-                    g_score[neighbor] = tentative_g_score
-                    f_score[neighbor] = g_score[neighbor] + heuristic(neighbor, goal)
-                    heapq.heappush(open_set, (f_score[neighbor], neighbor))
+        while current not in end_points and self.pathlengths.get(current, float('inf')) > 0:
+            next_move = self._choose_next_move(current, move_direction, end_points)
+            if current[0] == next_move[0]:
+                move_direction = self.VERTICAL
+            else:
+                move_direction = self.HORIZONTAL
+            path.append(next_move)
+            current = next_move
 
-        return None  # No path found
+        return path
 
-    def apply_movement_preferences(self, path, last_move):
-        if not path or len(path) < 2:
-            return path
+    def _choose_next_move(self, current: Tuple[int, int], previous_move_direction: int, end_points: List[Tuple[int, int]]) -> Tuple[int, int]:
+        """
+        Implements movement preferences as detailed in "Patching."
 
-        preferred_path = [path[0]]
-        for i in range(1, len(path)):
-            current = path[i-1]
-            next_pos = path[i]
-            move = (next_pos[0] - current[0], next_pos[1] - current[1])
+        Yields the distinctive zigzag movement pattern.        
 
-            if move == last_move:
-                # Try to find an alternative move
-                alternatives = [n for n in self.get_neighbors(current) if n != next_pos and n in path]
-                if alternatives:
-                    next_pos = min(alternatives, key=lambda x: path.index(x))
+        :param current: The current position of the unit.
+        :param previous_move_direction: The direction of the previous move.
+        :param end_points: The target points to reach.
+        :return: The next position to move to.
+        """
+        neighbors = self._get_neighbors(current)
+        valid_neighbors = [n for n in neighbors if self.game_map.is_in_arena(*n) and not self._is_blocked(n)]
+        
+        ideal_neighbor = min(valid_neighbors, key=lambda n: (self.pathlengths.get(n, float('inf')), 
+                                                             not self._better_direction(current, n, current, previous_move_direction, end_points)))
+        return ideal_neighbor
 
-            preferred_path.append(next_pos)
-            last_move = (next_pos[0] - current[0], next_pos[1] - current[1])
+    def _better_direction(self, prev_tile: Tuple[int, int], new_tile: Tuple[int, int], prev_best: Tuple[int, int], 
+                          previous_move_direction: int, end_points: List[Tuple[int, int]]) -> bool:
+        """
+        Returns if the new tile is a better direction than the previous best tile.
 
-        return preferred_path
+        Favors alternating horizontal and vertical movements.
+        """
+        if previous_move_direction == self.HORIZONTAL and new_tile[0] != prev_best[0]:
+            return prev_tile[1] != new_tile[1]
+        if previous_move_direction == self.VERTICAL and new_tile[1] != prev_best[1]:
+            return prev_tile[0] != new_tile[0]
+        if previous_move_direction == 0:
+            return prev_tile[1] != new_tile[1]
+        
+        direction = self._get_direction_from_endpoints(end_points)
+        if new_tile[1] == prev_best[1]:  # If they both moved horizontal...
+            return (direction[0] == 1 and new_tile[0] > prev_best[0]) or (direction[0] == -1 and new_tile[0] < prev_best[0])
+        if new_tile[0] == prev_best[0]:  # If they both moved vertical...
+            return (direction[1] == 1 and new_tile[1] > prev_best[1]) or (direction[1] == -1 and new_tile[1] < prev_best[1])
+        return True
 
-    def is_blocked(self, position):
+    def _is_blocked(self, position: Tuple[int, int]) -> bool:
         x, y = position
-        return self.game_map.grid[y][x] is not None and isinstance(self.game_map.grid[y][x], Structure)
-
-    def get_neighbors(self, position):
-        x, y = position
-        neighbors = [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]
-        return [pos for pos in neighbors if self.game_map.is_in_arena(*pos) and not self.is_blocked(pos)]
-
-    def is_reachable(self, start, end):
-        return self.a_star(start, end) is not None
+        return isinstance(self.game_map.grid[y][x], Structure)
