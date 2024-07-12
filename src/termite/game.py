@@ -110,10 +110,14 @@ class TerminalGame:
         """
         self.map = Map()
         self.pathfinder = Pathfinder(self.map)
-        if self.player1 is None: 
+        if player1 is None: 
             self.player1: Player = Player()
-        if self.player2 is None:
+        else:
+            self.player1 = player1
+        if player2 is None:
             self.player2: Player = Player()
+        else:
+            self.player2 = player2
         self.current_turn = 0
         self.frame_count = 0
         self.units: List[Unit] = []
@@ -170,25 +174,25 @@ class TerminalGame:
         Check if the position is in the player's half of the arena and if it's a valid position for the unit type.
         """
         x, y = position
-        is_player1 = player == self.player1 # TODO: Check if this is the correct way to compare players
+        is_player1 = player == self.player1
         
-        # Check if the position is within the arena
+        # Check if the position is within the diamond-shaped arena
         if not self.map.is_in_arena(x, y):
             return False
 
         if isinstance(unit, MobileUnit):
             # Mobile units can be deployed on the edges of the diamond on the current player's side
             if is_player1:
-                return (y == 13 and 0 <= x <= 13) or (x + y == 27 and 14 <= y <= 27)
+                return y <= 13 and abs(x) + abs(y) == 14
             else:  # Player 2
-                return (y == 13 and 14 <= x <= 27) or (x == y and 0 <= y <= 13)
+                return y >= 14 and abs(x) + abs(y) == 14
         elif isinstance(unit, Structure):
             # Static units can be deployed on the player's half of the diamond
             # and cannot be deployed on top of existing structures
             if is_player1:
-                valid_area = y > 13 or (y == 13 and x <= 13)
+                valid_area = y <= 13 and abs(x) + abs(y) <= 14
             else:  # Player 2
-                valid_area = y < 13 or (y == 13 and x >= 14)
+                valid_area = y >= 14 and abs(x) + abs(y) <= 14
             
             return valid_area and self.map.grid[y][x] is None  # Ensure the cell is empty
         

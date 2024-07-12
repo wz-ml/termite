@@ -1,5 +1,4 @@
 import heapq
-from .units import Unit, MobileUnit, Structure
 from typing import List, Union, Optional, Tuple
 class Map:
     def __init__(self):
@@ -11,9 +10,9 @@ class Map:
         """
         Check if a given position is within the arena boundaries.
         """
-        return abs(x - 13.5) + abs(y - 13.5) <= 13.5
+        return abs(x - 13.5) + abs(y - 13.5) <= 14
 
-    def place_unit(self, unit: Unit, x: int, y: int):
+    def place_unit(self, unit: 'Unit', x: int, y: int):
         """
         Place a unit on the map at the given position.
         """
@@ -42,7 +41,7 @@ class Pathfinder:
         self.HORIZONTAL = 1
         self.VERTICAL = 2
 
-    def find_path(self, unit: MobileUnit, start: Tuple[int, int], target_edge: str) -> List[Tuple[int, int]]:
+    def find_path(self, unit: 'MobileUnit', start: Tuple[int, int], target_edge: str) -> List[Tuple[int, int]]:
         end_points = self._get_end_points(target_edge)
         ideal_endpoint = self._idealness_search(start, end_points)
         self._validate(ideal_endpoint, end_points)
@@ -218,3 +217,6 @@ class Pathfinder:
     def _is_blocked(self, position: Tuple[int, int]) -> bool:
         x, y = position
         return isinstance(self.game_map.grid[y][x], Structure)
+
+# Prevent circular import
+from .units import Unit, MobileUnit, Structure

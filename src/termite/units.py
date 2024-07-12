@@ -1,4 +1,3 @@
-from .map import Pathfinder
 from typing import List, Union, Optional, Container, Tuple
 
 class Targeting:
@@ -362,6 +361,3 @@ class Turret(Structure):
                 if isinstance(unit, MobileUnit) and unit.side != self.side 
                 and self.distance_to(unit) <= self.range 
                 and unit.health > 0]
-
-# Leave at bottom to avoid circular import
-from .game import TerminalGame
