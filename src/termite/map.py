@@ -10,9 +10,9 @@ class Map:
         return abs(x - 13.5) + abs(y - 13.5) <= 13.5
 
     def place_unit(self, unit, x, y):
-        if self.is_in_arena(x, y):
-            self.grid[y][x] = unit
-            unit.position = (x, y)
+        assert self.is_in_arena(x, y) # Redundant check
+        self.grid[y][x] = unit
+        unit.position = (x, y)
 
 class Pathfinder:
     def __init__(self, game_map):

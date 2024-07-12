@@ -1,57 +1,96 @@
 from .map import Map, Pathfinder
-from .units import MobileUnit, Structure, Support
+from .units import Unit, MobileUnit, Structure, Support
 from .units import Demolisher, Interceptor, Scout, Wall, Turret, Support
 from colorama import init, Fore, Back, Style
 import warnings
+from typing import List, Union, Optional, Container, Tuple
 
 class Player:
+    """
+    A base class for all agents that play Terminal.
+    """
     def __init__(self):
         self.health = 30
         self.structure_points = 40
         self.mobile_points = 5
         self.deployments = []
 
-    def deploy(self, game_state):
-        # This method should be overridden by AI or human player implementations
-        # For now, we'll just return an empty list
+    def deploy(self, game_state: dict) -> List[Tuple[Union[MobileUnit, Structure], Tuple[int, int]]]:
+        """
+        This method should be overridden by AI or human player implementations.
+
+        :param game_state: A dictionary containing the current game state.
+        :return: A list of tuples containing the unit to deploy and the position to deploy it.
+
+        By default, returns an empty list.
+        """
         self.deployments = []
         return self.deployments
     
-    def can_afford(self, unit):
+    def can_afford(self, unit: Union[MobileUnit, Structure]) -> bool:
+        """
+        Check if this player can afford to deploy a unit.
+        """
         if isinstance(unit, MobileUnit):
             return self.mobile_points >= unit.cost
         elif isinstance(unit, Structure):
             return self.structure_points >= unit.cost
         return False
 
-    def deduct_cost(self, unit):
+    def deduct_cost(self, unit: Unit):
         if isinstance(unit, MobileUnit):
             self.mobile_points -= unit.cost
         elif isinstance(unit, Structure):
             self.structure_points -= unit.cost
 
-    def decay_mobile_points(self):
+    def decay_mobile_points(self) -> None:
+        """
+        Decay mechanic where unspent mobile points are reduced by 25% each turn.
+        """
         self.mobile_points = round(self.mobile_points * 0.75, 1)
 
-    def add_resources(self, turn_number):
+    def add_resources(self, turn_number: int) -> None:
+        """
+        Grant resources to the player based on the current turn number.
+
+        Happens once during the Restore Phase.
+        """
         self.structure_points += 5
         self.mobile_points += 5 + (turn_number // 10)
 
-    def remove_structure(self, structure):
+    def remove_structure(self, structure: Structure) -> None:
         refund = round(0.75 * structure.cost * (structure.health / structure.max_health), 1)
         self.structure_points += refund
     
 class TerminalGame:
-    def __init__(self):
+    """
+    The main game class that manages the game state and progression.
+
+    The game loop is divided into three phases:
+    - Restore Phase: Players gain resources and mobile points.
+    - Deploy Phase: Players deploy units onto the map.
+    - Action Phase: Units move and attack each other.
+
+    The game ends after 100 turns or when a player's health reaches 0.
+    """
+    def __init__(self, player1: Optional[Player] = None, player2: Optional[Player] = None):
+        """
+        Initialize the game with two players.
+        """
         self.map = Map()
         self.pathfinder = Pathfinder(self.map)
-        self.player1 = Player()
-        self.player2 = Player()
+        if self.player1 is None: 
+            self.player1: Player = Player()
+        if self.player2 is None:
+            self.player2: Player = Player()
         self.current_turn = 0
         self.frame_count = 0
         self.units = []
 
     def play_turn(self):
+        """
+        Play a single turn of the game.
+        """
         self.restore_phase()
         self.deploy_phase()
         self.action_phase()
@@ -62,6 +101,8 @@ class TerminalGame:
             player.decay_mobile_points()
             player.add_resources(self.current_turn)
         # Add logic for resource generation from structures
+        # Note from Will: There's this line in the rulebook: Structures that generate resources will do so at this time.
+        # But I cannot for the life of me find which structures generate resources. Leaving this blank for now.
 
     def deploy_phase(self):
         for player in (self.player1, self.player2):
@@ -77,20 +118,33 @@ class TerminalGame:
                         print(f"Player cannot afford to deploy {unit.unit_type}")
                 else:
                     print(f"Invalid deployment: {unit.unit_type} at {position}")
-
-    def is_valid_deployment(self, player, unit, position):
-        # Check if the position is in the player's half of the arena
-        # and if it's a valid position for the unit type
-        # This is a simplified check and should be expanded based on game rules
+    
+    def is_valid_deployment(self, player: Player, unit: Unit, position: Tuple[int, int]) -> bool:
+        """
+        Check if the position is in the player's half of the arena and if it's a valid position for the unit type.
+        """
         x, y = position
-        is_player1 = player == self.player1
-        is_in_player_half = y < 14 if is_player1 else y >= 14
-        is_valid_position = self.map.is_in_arena(x, y) and self.map.grid[y][x] is None
+        is_player1 = player == self.player1 # TODO: Check if this is the correct way to compare players
         
+        # Check if the position is within the arena
+        if not self.map.is_in_arena(x, y):
+            return False
+
         if isinstance(unit, MobileUnit):
-            return is_valid_position and (x == 0 or x == 27)  # Mobile units on edges
+            # Mobile units can be deployed on the edges of the diamond on the current player's side
+            if is_player1:
+                return (y == 13 and 0 <= x <= 13) or (x + y == 27 and 14 <= y <= 27)
+            else:  # Player 2
+                return (y == 13 and 14 <= x <= 27) or (x == y and 0 <= y <= 13)
         elif isinstance(unit, Structure):
-            return is_valid_position and is_in_player_half
+            # Static units can be deployed on the player's half of the diamond
+            # and cannot be deployed on top of existing structures
+            if is_player1:
+                valid_area = y > 13 or (y == 13 and x <= 13)
+            else:  # Player 2
+                valid_area = y < 13 or (y == 13 and x >= 14)
+            
+            return valid_area and self.map.grid[y][x] is None  # Ensure the cell is empty
         
         return False
 
@@ -201,7 +255,7 @@ class TerminalGame:
             # Implement computation time comparison logic
             pass
 
-    def get_game_state(self):
+    def get_game_state(self) -> dict:
         # Return a representation of the current game state
         # This should include information that players need to make decisions
         return {
