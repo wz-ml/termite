@@ -161,6 +161,8 @@ class MobileUnit(Unit):
         Deal damage to the opponent when this unit has reached the enemy edge of the diamond-shaped arena.
         """
         game.get_unit_owner(self.opposite_side(self.side)).health -= 1
+        # Demolish yourself
+        self.health = 0
 
     def has_reached_enemy_edge(self, game: 'TerminalGame') -> bool:
         """
