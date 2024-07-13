@@ -190,9 +190,9 @@ class TerminalGame:
             # Static units can be deployed on the player's half of the diamond
             # and cannot be deployed on top of existing structures
             if is_player1:
-                valid_area = y <= 13 and abs(x) + abs(y) <= 14
+                valid_area = y <= 13 and abs(x - 13.5) + abs(y - 13.5) <= 14
             else:  # Player 2
-                valid_area = y >= 14 and abs(x) + abs(y) <= 14
+                valid_area = y >= 14 and abs(x - 13.5) + abs(y - 13.5) <= 14
             
             return valid_area and self.map.grid[y][x] is None  # Ensure the cell is empty
         
