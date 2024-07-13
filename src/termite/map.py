@@ -17,16 +17,24 @@ class Map:
         Place a unit on the map at the given position.
         """
         assert self.is_in_arena(x, y) # Redundant check
-        unit.position = (x, y)
         if isinstance(unit, MobileUnit):
             # Mobile units can be stacked, so we'll store them in a list
-            if self.map.grid[y][x] is None or not isinstance(self.map.grid[y][x], list):
-                self.map.grid[y][x] = []
-            self.map.grid[y][x].append(unit)
+            if self.grid[y][x] is None or not isinstance(self.map.grid[y][x], list):
+                self.grid[y][x] = []
+            self.grid[y][x].append(unit)
         else:
             # Structures cannot be stacked
-            self.map.grid[y][x] = unit
+            self.grid[y][x] = unit
 
+    def clear(self):
+        """
+        Clear the map of all mobile units.
+        """
+        for y in range(self.height):
+            for x in range(self.width):
+                if isinstance(self.grid[y][x], list):
+                    self.grid[y][x] = None
+        return self
 class Pathfinder:
     """
     Pathing class that implements the A* algorithm to find the shortest path between two points on the map.
@@ -35,15 +43,17 @@ class Pathfinder:
 
     A lot of code is ported from the Terminal python-algo starter kit.
     """
-class Pathfinder:
     def __init__(self, game_map: Map):
         self.game_map = game_map
         self.HORIZONTAL = 1
         self.VERTICAL = 2
 
     def find_path(self, unit: 'MobileUnit', start: Tuple[int, int], target_edge: str) -> List[Tuple[int, int]]:
+        print(target_edge)
         end_points = self._get_end_points(target_edge)
+        print(end_points)
         ideal_endpoint = self._idealness_search(start, end_points)
+        print(ideal_endpoint)
         self._validate(ideal_endpoint, end_points)
         return self._get_path(start, end_points)
 
@@ -53,13 +63,13 @@ class Pathfinder:
         """
         end_points = []
         if target_edge == 'top-left':
-            end_points = [(x, x) for x in range(14) if self.game_map.is_in_arena(x, x)]
+            end_points = [(x, x + 14) for x in range(0, 14) if self.game_map.is_in_arena(x, x)]
         elif target_edge == 'top-right':
-            end_points = [(x, 27-x) for x in range(14, 28) if self.game_map.is_in_arena(x, 27-x)]
+            end_points = [(x, 41-x) for x in range(14, 28) if self.game_map.is_in_arena(x, 27-x)]
         elif target_edge == 'bottom-left':
-            end_points = [(x, 27-x) for x in range(14) if self.game_map.is_in_arena(x, 27-x)]
+            end_points = [(x, 13-x) for x in range(0, 14) if self.game_map.is_in_arena(x, 27-x)]
         elif target_edge == 'bottom-right':
-            end_points = [(x, x) for x in range(14, 28) if self.game_map.is_in_arena(x, x)]
+            end_points = [(x, x-14) for x in range(14, 28) if self.game_map.is_in_arena(x, x)]
         return end_points
 
     def _idealness_search(self, start: Tuple[int, int], end_points: List[Tuple[int, int]]) -> Tuple[int, int]:
@@ -139,7 +149,7 @@ class Pathfinder:
         """
         Scan with BFS from the ideal point to calculate pathlengths from all reachable points.
         """
-        queue = [ideal_tile] if ideal_tile not in end_points else end_points
+        queue = [ideal_tile] if ideal_tile not in end_points else end_points.copy()
         visited = set(queue)
         pathlengths = {pos: 0 for pos in queue}
 

@@ -61,15 +61,21 @@ class Unit:
         self.side = side
 
         if self.side == 'bottom':
-            if self.position[0] <= 13:
+            if self.position[0] > 13.5:
                 self.target_edge = 'top-left'
             else:
                 self.target_edge = 'top-right'
         else:  # self.side == 'top'
-            if self.position[0] <= 13:
+            if self.position[0] > 13.5:
                 self.target_edge = 'bottom-left'
             else:
                 self.target_edge = 'bottom-right'
+
+    def opposite_side(self, side:str) -> str:
+        """
+        Get the opposite side of the arena.
+        """
+        return 'top' if side == 'bottom' else 'bottom'
 
     def distance_to(self, other_unit: 'Unit') -> float:
         """
@@ -127,6 +133,7 @@ class MobileUnit(Unit):
         self.last_move = None
         self.path = []
         self.destination = None
+        self.distance_moved = 0
 
     def add_shield(self, shield_amount: float) -> None:
         self.shields += shield_amount
@@ -148,7 +155,13 @@ class MobileUnit(Unit):
                     self.reach_enemy_edge(game)
             else:
                 self.self_destruct(game)
-    
+
+    def reach_enemy_edge(self, game: 'TerminalGame') -> None:
+        """
+        Deal damage to the opponent when this unit has reached the enemy edge of the diamond-shaped arena.
+        """
+        game.get_unit_owner(self.opposite_side(self.side)).health -= 1
+
     def has_reached_enemy_edge(self, game: 'TerminalGame') -> bool:
         """
         Check if this unit has reached the enemy edge of the diamond-shaped arena.
@@ -156,12 +169,12 @@ class MobileUnit(Unit):
         x, y = self.position
         if self.side == 'bottom':
             # For units starting at the bottom, they reach the enemy edge when:
-            # x + y == 27 (top-right edge) or x - y == 0 (top-left edge)
-            return x + y == 27 or x == y
+            # x + y == 41 (top-right edge) or x - y == 0 (top-left edge)
+            return x + y == 41 or y - x == 14
         else:  # self.side == 'top'
             # For units starting at the top, they reach the enemy edge when:
-            # x + y == 27 (bottom-left edge) or y - x == 0 (bottom-right edge)
-            return x + y == 27 or y == x
+            # x + y == 13 (bottom-left edge) or y - x == 0 (bottom-right edge)
+            return x + y == 13 or x - y == 14
     
     def attack(self, game_state: 'TerminalGame') -> Union[float, None]:
         """

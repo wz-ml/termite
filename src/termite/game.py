@@ -126,10 +126,10 @@ class TerminalGame:
         """
         Primary method. Play a single turn of the game.
         """
-        self.restore_phase()
         self.deploy_phase()
         self.action_phase()
         self.current_turn += 1
+        self.restore_phase()
 
     def restore_phase(self):
         """
@@ -183,9 +183,9 @@ class TerminalGame:
         if isinstance(unit, MobileUnit):
             # Mobile units can be deployed on the edges of the diamond on the current player's side
             if is_player1:
-                return y <= 13 and abs(x) + abs(y) == 14
+                return y <= 13 and abs(x - 13.5) + abs(y - 13.5) == 14
             else:  # Player 2
-                return y >= 14 and abs(x) + abs(y) == 14
+                return y >= 14 and abs(x - 13.5) + abs(y - 13.5) == 14
         elif isinstance(unit, Structure):
             # Static units can be deployed on the player's half of the diamond
             # and cannot be deployed on top of existing structures
@@ -204,6 +204,7 @@ class TerminalGame:
         """
         x, y = position        
         unit.creation_time = self.frame_count
+        unit.position = (x, y)
         unit.set_side('bottom' if player == self.player1 else 'top')
         self.units.append(unit)
         self.map.place_unit(unit, x, y)
@@ -242,7 +243,14 @@ class TerminalGame:
         for unit in list(self.units):  # Create a copy of the list to avoid modification during iteration
             if isinstance(unit, MobileUnit):
                 unit.move(self)
-                
+        # Remove all mobile units from the map
+        self.map.clear()
+        # Add all new positions to the map
+        for unit in self.units:
+            if isinstance(unit, MobileUnit):
+                x, y = unit.position
+                self.map.place_unit(unit, x, y)
+        
     def reset_attack_status(self):
         """
         Step 3: Reset the attack status of all mobile units.
@@ -312,10 +320,12 @@ class TerminalGame:
     """
     --------------- Helper Methods ---------------
     """
-    def get_unit_owner(self, unit: Unit) -> Player:
+    def get_unit_owner(self, unit: Union[Unit, str]) -> Player:
         """
         Determine which player owns a given unit.
         """
+        if isinstance(unit, str):
+            return self.player1 if unit == 'bottom' else self.player2
         return self.player1 if unit.side == 'bottom' else self.player2
 
     def units_active(self) -> bool:
@@ -422,7 +432,7 @@ class TerminalGame:
         output.append("")
 
         # Game board
-        for y in range(self.map.height):
+        for y in reversed(range(self.map.height)):
             row = ""
             for x in range(self.map.width):
                 if not self.map.is_in_arena(x, y):
@@ -430,7 +440,11 @@ class TerminalGame:
                 elif self.map.grid[y][x] is None:
                     row += f"{Fore.WHITE}· {Style.RESET_ALL}"
                 else:
-                    unit = self.map.grid[y][x]
+                    units = self.map.grid[y][x]
+                    if isinstance(units, list):
+                        unit = units[0]
+                    else:
+                        unit = units
                     color = self.get_unit_color(unit)
                     if isinstance(unit, Scout):
                         row += f"{color}{'S' if unit.side == 'bottom' else 's'} {Style.RESET_ALL}"
