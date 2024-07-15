@@ -63,13 +63,13 @@ class Pathfinder:
         """
         end_points = []
         if target_edge == 'top-left':
-            end_points = [(x, x + 14) for x in range(0, 14) if self.game_map.is_in_arena(x, x)]
+            end_points = [(x, x + 14) for x in range(0, 14) if self.game_map.is_in_arena(x, x+14)]
         elif target_edge == 'top-right':
-            end_points = [(x, 41-x) for x in range(14, 28) if self.game_map.is_in_arena(x, 27-x)]
+            end_points = [(x, 41-x) for x in range(14, 28) if self.game_map.is_in_arena(x, 41-x)]
         elif target_edge == 'bottom-left':
-            end_points = [(x, 13-x) for x in range(0, 14) if self.game_map.is_in_arena(x, 27-x)]
+            end_points = [(x, 13-x) for x in range(0, 14) if self.game_map.is_in_arena(x, 13-x)]
         elif target_edge == 'bottom-right':
-            end_points = [(x, x-14) for x in range(14, 28) if self.game_map.is_in_arena(x, x)]
+            end_points = [(x, x-14) for x in range(14, 28) if self.game_map.is_in_arena(x, x-14)]
         return end_points
 
     def _idealness_search(self, start: Tuple[int, int], end_points: List[Tuple[int, int]]) -> Tuple[int, int]:

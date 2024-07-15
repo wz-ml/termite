@@ -139,20 +139,19 @@ class MobileUnit(Unit):
         self.shields += shield_amount
 
     def move(self, game: 'TerminalGame') -> None:
+        if self.has_reached_enemy_edge(game):
+            self.reach_enemy_edge(game)
         self.frames_since_last_move += 1
         if self.frames_since_last_move >= self.speed:
             if not self.path:
                 self.path = game.pathfinder.find_path(self, self.position, self.target_edge)
-            
+            print("Path:", self.path)
             if self.path:
                 next_pos = self.path.pop(0)
                 self.last_move = (next_pos[0] - self.position[0], next_pos[1] - self.position[1])
                 self.position = next_pos
                 self.frames_since_last_move = 0
                 self.distance_moved += 1
-
-                if self.has_reached_enemy_edge(game):
-                    self.reach_enemy_edge(game)
             else:
                 self.self_destruct(game)
 
