@@ -19,7 +19,7 @@ class Map:
         assert self.is_in_arena(x, y) # Redundant check
         if isinstance(unit, MobileUnit):
             # Mobile units can be stacked, so we'll store them in a list
-            if self.grid[y][x] is None or not isinstance(self.map.grid[y][x], list):
+            if self.grid[y][x] is None or not isinstance(self.grid[y][x], list):
                 self.grid[y][x] = []
             self.grid[y][x].append(unit)
         else:

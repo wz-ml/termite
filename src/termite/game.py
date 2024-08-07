@@ -114,10 +114,14 @@ class TerminalGame:
             self.player1: Player = Player()
         else:
             self.player1 = player1
+        self.player1.side = 'bottom'
+
         if player2 is None:
             self.player2: Player = Player()
         else:
             self.player2 = player2
+        self.player2.side = "top"
+
         self.current_turn = 0
         self.frame_count = 0
         self.units: List[Unit] = []
