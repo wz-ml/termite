@@ -1,3 +1,6 @@
+# Termite-specific folders
+C1GamesStarterKit/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
